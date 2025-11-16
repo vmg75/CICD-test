@@ -1,0 +1,53 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  DOCKER_IMAGE: fastapi-date-app
+  DOCKER_TAG: latest
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set SSH port
+        id: set-port
+        run: |
+          if [ -z "${{ secrets.SERVER_PORT }}" ]; then
+            echo "port=22" >> $GITHUB_OUTPUT
+          else
+            echo "port=${{ secrets.SERVER_PORT }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to remote server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ steps.set-port.outputs.port }}
+          source: "."
+          target: "/tmp/fastapi-app"
+
+      - name: SSH and deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ steps.set-port.outputs.port }}
+          script: |
+            cd /tmp/fastapi-app
+            docker stop ${{ env.DOCKER_IMAGE }} || true
+            docker rm ${{ env.DOCKER_IMAGE }} || true
+            docker build -t ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }} .
+            docker run -d --name ${{ env.DOCKER_IMAGE }} -p 8000:8000 --restart unless-stopped ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+
