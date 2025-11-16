@@ -18,25 +18,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub (optional)
-        if: ${{ secrets.DOCKER_USERNAME }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: ${{ secrets.DOCKER_USERNAME != '' }}
-          tags: |
-            ${{ secrets.DOCKER_USERNAME != '' && format('{0}/{1}:{2}', secrets.DOCKER_USERNAME, env.DOCKER_IMAGE, env.DOCKER_TAG) || format('{0}:{1}', env.DOCKER_IMAGE, env.DOCKER_TAG) }}
-          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}:buildcache,mode=max
+      - name: Set SSH port
+        id: set-port
+        run: |
+          if [ -z "${{ secrets.SERVER_PORT }}" ]; then
+            echo "port=22" >> $GITHUB_OUTPUT
+          else
+            echo "port=${{ secrets.SERVER_PORT }}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Deploy to remote server
         uses: appleboy/scp-action@master
@@ -44,7 +33,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SERVER_PORT || 22 }}
+          port: ${{ steps.set-port.outputs.port }}
           source: "."
           target: "/tmp/fastapi-app"
 
@@ -54,7 +43,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SERVER_PORT || 22 }}
+          port: ${{ steps.set-port.outputs.port }}
           script: |
             cd /tmp/fastapi-app
             docker stop ${{ env.DOCKER_IMAGE }} || true
