@@ -5,12 +5,6 @@ from typing import Dict
 app = FastAPI(title="Server Date API", version="1.0.0")
 
 
-@app.get("/")
-async def root() -> Dict[str, str]:
-    """Корневой endpoint"""
-    return {"message": "Server Date API"}
-
-
 @app.get("/date")
 async def get_server_date() -> Dict[str, str]:
     """Возвращает текущую дату и время на сервере"""
